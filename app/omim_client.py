@@ -1,122 +1,341 @@
+"""
+omim_client.py
+
+Small, clean OMIM client for GeneGPT2.
+
+DATA PLAN (what we keep from OMIM):
+-----------------------------------
+For each gene, we only keep:
+
+1. omim_id
+2. inheritance
+   - Single string summarizing inheritance patterns seen in phenotypeMap
+     (e.g., "Autosomal dominant; Autosomal recessive")
+3. phenotypes (list of small dicts)
+   Each item:
+      {
+          "name": str | None,
+          "mim_number": str | None,
+          "inheritance": str | None,
+          "mapping_key": str | None,
+      }
+4. link
+   - Public OMIM entry link, e.g. "https://www.omim.org/entry/113705"
+
+Everything else is ignored.
+
+This module exposes ONE high-level function:
+
+    get_omim_summary(gene_symbol: str, omim_id: str | None = None) -> dict
+
+which returns a dict shaped like:
+
+    {
+        "used": True/False,
+        "omim_id": str | None,
+        "inheritance": str | None,
+        "phenotypes": list,
+        "key_points": list,   # reserved for future use
+        "link": str | None,
+        "reason": str (optional, when used=False or to describe source)
+    }
+"""
+
 import os
+from typing import Dict, Any, Optional, List
 import requests
 
-# Base endpoint (no /search here)
+# Base URL for OMIM API
 OMIM_BASE_URL = "https://api.omim.org/api/entry"
 
-# Temporary gene → OMIM ID mapping for v1 demo
-# We can expand this later.
-GENE_TO_MIM = {
+# -------------------------------------------------------------------
+# Temporary gene_symbol -> OMIM ID mapping for v1 demo
+# (Question parser ALSO has mappings; this is fine for now)
+# -------------------------------------------------------------------
+GENE_TO_OMIM_ID: Dict[str, str] = {
+    "TP53": "191170",
+    "ERBB2": "164870",
+    "MYH7": "160760",
     "BRCA1": "113705",
+    "BRCA2": "600185",
+    "CFTR": "602421",
+    # add more as needed
 }
 
 
-def _get_omim_api_key() -> str:
+def _get_omim_api_key() -> Optional[str]:
     """
     Read OMIM API key from environment variable OMIM_API_KEY.
-    Do NOT hard-code your key in this file.
+    If not set, we return None and the API call will fail with auth error.
     """
-    key = os.environ.get("OMIM_API_KEY")
-    if not key:
-        raise RuntimeError(
-            "OMIM_API_KEY environment variable not set. "
-            "Run in this terminal: export OMIM_API_KEY='your_real_key_here'"
-        )
-    return key
+    return os.environ.get("OMIM_API_KEY")
 
 
-def fetch_and_filter_omim(gene_symbol: str) -> dict:
+# -------------------------------------------------------------------
+# Low-level OMIM fetch
+# -------------------------------------------------------------------
+
+def fetch_omim_entry_raw(
+    gene_symbol: str,
+    omim_id: str | None = None,
+) -> Optional[Dict[str, Any]]:
     """
-    Real-ish OMIM client for v1.
+    Low-level OMIM client.
 
-    For now:
-    - Map gene_symbol -> mimNumber using GENE_TO_MIM.
-    - Call /api/entry?mimNumber=...&include=geneMap&format=json&apiKey=...
-    - Parse gene_id_omim + a short diseases list.
-
-    Returns structure like:
-    {
-        "gene_id_omim": "113705",
-        "diseases": [
-            {
-                "name": "...",
-                "omim_id": "113705",
-                "inheritance": "autosomal dominant",
-                "short_note": "..."
-            },
-            ...
-        ]
-    }
+    Steps:
+      1) Decide OMIM ID:
+           - if omim_id is provided, use that (preferred)
+           - else gene_symbol -> omim_id using GENE_TO_OMIM_ID
+      2) Call OMIM entry endpoint with ?mimNumber=...&include=geneMap
+      3) Return the raw 'entry' dict, or None on failure
     """
+    if not gene_symbol and not omim_id:
+        return None
 
-    if not gene_symbol:
-        return {"gene_id_omim": None, "diseases": []}
+    gene_symbol_up = (gene_symbol or "").upper()
 
-    gene_symbol_up = gene_symbol.upper()
+    # Prefer the ID passed from the resolver if available
+    effective_omim_id = omim_id or GENE_TO_OMIM_ID.get(gene_symbol_up)
 
-    mim_number = GENE_TO_MIM.get(gene_symbol_up)
-    if not mim_number:
-        # For genes we don't know yet, just return safe empty structure
-        print(f"[OMIM] No MIM mapping for gene {gene_symbol_up}, returning empty result.")
-        return {"gene_id_omim": None, "diseases": []}
+    if not effective_omim_id:
+        print(f"[OMIM] No OMIM mapping/id for symbol {gene_symbol_up}, returning None.")
+        return None
 
     api_key = _get_omim_api_key()
+    if not api_key:
+        print("[OMIM] OMIM_API_KEY not set; cannot call OMIM API.")
+        return None
 
-    params = {
-        "mimNumber": mim_number,
-        "include": "geneMap",
+    params: Dict[str, Any] = {
+        "mimNumber": effective_omim_id,
         "format": "json",
+        "include": "geneMap",
         "apiKey": api_key,
     }
 
     try:
-        resp = requests.get(OMIM_BASE_URL, params=params, timeout=10)
+        resp = requests.get(OMIM_BASE_URL, params=params, timeout=15)
         print(f"[OMIM] Request URL: {resp.url}")
         resp.raise_for_status()
     except requests.RequestException as e:
-        print(f"[OMIM] Error fetching data for {gene_symbol_up}: {e}")
-        return {"gene_id_omim": None, "diseases": []}
+        print(f"[OMIM] Error fetching data for {gene_symbol_up} (OMIM {effective_omim_id}): {e}")
+        return None
 
     data = resp.json()
+    omim_root = data.get("omim", {})
+    entry_list = omim_root.get("entryList") or []
 
-    # ---- Parse OMIM JSON safely ----
-    entry_list = data.get("omim", {}).get("entryList", [])
     if not entry_list:
-        return {"gene_id_omim": None, "diseases": []}
+        print(f"[OMIM] No entryList for OMIM id {effective_omim_id}")
+        return None
 
-    entry = entry_list[0].get("entry", {})
-    gene_mim_number = entry.get("mimNumber")
+    first = entry_list[0] or {}
+    # OMIM usually nests entry under "entry"
+    entry = first.get("entry") or first
 
-    diseases = []
-    gene_map = entry.get("geneMap", {})
-    phen_list = gene_map.get("phenotypeMapList", [])
+    if not isinstance(entry, dict):
+        print(f"[OMIM] Unexpected entry structure for OMIM id {effective_omim_id}")
+        return None
 
-    for phen_item in phen_list:
-        phen = phen_item.get("phenotypeMap", {})
+    # Attach omim_id explicitly so cleaner can always see it
+    entry.setdefault("mimNumber", effective_omim_id)
+    return entry
 
-        name = phen.get("phenotype")
-        phen_mim = phen.get("phenotypeMimNumber")
-        inheritance = phen.get("phenotypeInheritance")
 
-        diseases.append(
-            {
-                "name": name,
-                "omim_id": str(phen_mim) if phen_mim else None,
-                "inheritance": inheritance,
-                "short_note": None,
-            }
-        )
+# -------------------------------------------------------------------
+# Helpers to parse phenotype / inheritance
+# -------------------------------------------------------------------
 
-    diseases = diseases[:5]
+def _extract_gene_map(entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Try to find the geneMap object within an OMIM entry.
+    We make this robust because OMIM JSON can vary a bit.
+    """
+    # Most common pattern: entry["geneMap"]
+    gene_map = entry.get("geneMap")
+    if isinstance(gene_map, dict):
+        return gene_map
+
+    # Some responses use a list wrapper
+    gene_map_list = entry.get("geneMapList")
+    if isinstance(gene_map_list, list) and gene_map_list:
+        first = gene_map_list[0] or {}
+        if isinstance(first, dict):
+            inner = first.get("geneMap") or first
+            if isinstance(inner, dict):
+                return inner
+
+    return None
+
+
+def _extract_phenotypes_and_inheritance(
+    entry: Dict[str, Any],
+) -> (List[Dict[str, Any]], Optional[str]):
+    """
+    From an OMIM 'entry', extract:
+
+      - phenotypes: list of small dicts
+      - inheritance_summary: single string summarizing inheritance patterns
+
+    using geneMap.phenotypeMapList.
+    """
+    phenotypes: List[Dict[str, Any]] = []
+    inheritance_labels = set()
+
+    gene_map = _extract_gene_map(entry)
+    if not gene_map:
+        return phenotypes, None
+
+    pheno_list = gene_map.get("phenotypeMapList") or []
+    if not isinstance(pheno_list, list):
+        return phenotypes, None
+
+    for item in pheno_list:
+        if not isinstance(item, dict):
+            continue
+        pm = item.get("phenotypeMap") or item
+        if not isinstance(pm, dict):
+            continue
+
+        name = pm.get("phenotype")
+        pheno_mim = pm.get("phenotypeMimNumber")
+        inh = pm.get("phenotypeInheritance")
+        mapping_key = pm.get("mappingKey")
+
+        if inh:
+            inheritance_labels.add(inh)
+
+        if name or pheno_mim or inh:
+            phenotypes.append(
+                {
+                    "name": name,
+                    "mim_number": str(pheno_mim) if pheno_mim else None,
+                    "inheritance": inh,
+                    "mapping_key": str(mapping_key) if mapping_key is not None else None,
+                }
+            )
+
+    if inheritance_labels:
+        # Join distinct inheritance patterns into a single readable string
+        inheritance_summary = "; ".join(sorted(inheritance_labels))
+    else:
+        inheritance_summary = None
+
+    return phenotypes, inheritance_summary
+
+
+# -------------------------------------------------------------------
+# Cleaner: raw OMIM entry -> small evidence box
+# -------------------------------------------------------------------
+
+def _clean_omim_entry(entry: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Convert a raw OMIM 'entry' dict into the small, clean evidence format.
+    """
+    if not isinstance(entry, dict):
+        return {
+            "used": False,
+            "omim_id": None,
+            "inheritance": None,
+            "phenotypes": [],
+            "key_points": [],
+            "link": None,
+            "reason": "No OMIM entry found.",
+        }
+
+    omim_id = entry.get("mimNumber")
+    if omim_id is not None:
+        omim_id = str(omim_id)
+
+    phenotypes, inheritance_summary = _extract_phenotypes_and_inheritance(entry)
+
+    link = f"https://www.omim.org/entry/{omim_id}" if omim_id else None
 
     return {
-        "gene_id_omim": str(gene_mim_number) if gene_mim_number else None,
-        "diseases": diseases,
+        "used": True,
+        "omim_id": omim_id,
+        "inheritance": inheritance_summary,
+        "phenotypes": phenotypes,
+        "key_points": [],  # reserved for future hand-written nuggets
+        "link": link,
+        # NEW: explicit reason field so memory can later say
+        # "this originally came from OMIM API"
+        "reason": "Fetched from OMIM API.",
     }
 
 
-# Tiny manual test
+# -------------------------------------------------------------------
+# High-level helper (ONLY function used by other files)
+# -------------------------------------------------------------------
+
+def get_omim_summary(gene_symbol: str, omim_id: str | None = None) -> Dict[str, Any]:
+    """
+    Get a clean OMIM summary for a gene.
+
+    If omim_id is provided (from the mini-brain / resolver), we trust it
+    and call OMIM by ID. Otherwise we fall back to local mapping
+    GENE_TO_OMIM_ID using the gene_symbol.
+
+    Returns a dict like:
+    {
+        "used": True/False,
+        "omim_id": str | None,
+        "inheritance": str | None,
+        "phenotypes": list,
+        "key_points": list,
+        "link": str | None,
+        "reason": str (optional, when used=False or to describe source)
+    }
+    """
+    gene_symbol = (gene_symbol or "").strip()
+    if not gene_symbol and not omim_id:
+        return {
+            "used": False,
+            "omim_id": None,
+            "inheritance": None,
+            "phenotypes": [],
+            "key_points": [],
+            "link": None,
+            "reason": "No gene symbol or OMIM ID provided.",
+        }
+
+    try:
+        raw_entry = fetch_omim_entry_raw(gene_symbol, omim_id=omim_id)
+    except Exception as e:
+        # Fail-safe: never crash the app because of OMIM
+        return {
+            "used": False,
+            "omim_id": omim_id,
+            "inheritance": None,
+            "phenotypes": [],
+            "key_points": [],
+            "link": None,
+            "reason": f"Error calling OMIM: {e}",
+        }
+
+    if not raw_entry:
+        return {
+            "used": False,
+            "omim_id": omim_id,
+            "inheritance": None,
+            "phenotypes": [],
+            "key_points": [],
+            "link": None,
+            "reason": f"No OMIM entry found for gene symbol {gene_symbol} (omim_id={omim_id}).",
+        }
+
+    return _clean_omim_entry(raw_entry)
+
+
+# Tiny manual test (optional)
 if __name__ == "__main__":
-    print("Testing OMIM client for BRCA1...\n")
-    result = fetch_and_filter_omim("BRCA1")
-    print(result)
+    for g in ["TP53", "ERBB2", "MYH7", "BRCA1", "BRCA2", "CFTR"]:
+        print(f"\nTesting OMIM client for {g}...\n")
+        summary = get_omim_summary(g)
+        print(f"get_omim_summary({g}):")
+        print("  used:", summary.get("used"))
+        print("  omim_id:", summary.get("omim_id"))
+        print("  inheritance:", summary.get("inheritance"))
+        print("  #phenotypes:", len(summary.get("phenotypes") or []))
+        print("  link:", summary.get("link"))
+        print("  reason:", summary.get("reason"))
