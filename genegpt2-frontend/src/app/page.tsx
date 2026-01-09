@@ -159,7 +159,8 @@ export default function Home() {
       {/* 1. SIDEBAR (Left) */}
       <div
         className={cn(
-          "flex-none flex-col bg-[#171717] transition-all duration-300 ease-in-out border-r border-[#303030]",
+          "flex-col bg-[#171717] transition-all duration-300 ease-in-out border-r border-[#303030] z-50",
+          "absolute inset-y-0 left-0 h-full shadow-2xl md:relative md:h-auto md:shadow-none md:flex-none",
           showSidebar ? "w-[260px] flex" : "w-0 hidden overflow-hidden"
         )}
       >
@@ -168,6 +169,7 @@ export default function Home() {
             setMessages([]);
             setCurrentEvidence(null);
             setCurrentMetrics(null); // Clear metrics
+            if (window.innerWidth < 768) setShowSidebar(false);
           }} className="w-full flex items-center justify-between px-3 py-3 text-sm text-gray-200 hover:bg-[#212121] rounded-lg transition-colors group">
             <span className="flex items-center gap-3 font-medium">
               <span className="bg-white text-black rounded-full p-1"><Sparkles className="w-3.5 h-3.5" /></span>
@@ -264,7 +266,7 @@ export default function Home() {
         {/* Scrollable Messages */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto custom-scrollbar px-4"
+          className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-32 md:pb-0"
         >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center pb-20">
@@ -288,7 +290,10 @@ export default function Home() {
         </div>
 
         {/* Input Area */}
-        <div className="flex-none p-4 pb-6 w-full flex justify-center bg-gradient-to-t from-[#212121] to-[#212121]/0">
+        <div className={cn(
+          "flex-none p-4 pb-6 w-full flex justify-center bg-gradient-to-t from-[#212121] to-[#212121]/0",
+          "fixed bottom-0 left-0 right-0 z-40 bg-[#212121] md:static md:bg-transparent"
+        )}>
           <div className="w-full max-w-3xl relative">
             <div className="relative flex flex-col bg-[#2F2F2F] rounded-xl shadow-lg ring-1 ring-white/10 focus-within:ring-white/20 transition-all duration-200 overflow-hidden group">
               <textarea
@@ -312,8 +317,9 @@ export default function Home() {
       {/* 3. RIGHTS EVIDENCE PANEL (Flex-none, Collapsible) */}
       <div
         className={cn(
-          "flex-none bg-[#000000] border-l border-[#303030] transition-all duration-300 ease-in-out overflow-hidden flex flex-col",
-          showEvidence ? "w-[400px]" : "w-0"
+          "bg-[#000000] border-l border-[#303030] transition-all duration-300 ease-in-out overflow-hidden flex flex-col z-50",
+          "absolute inset-y-0 right-0 h-full shadow-2xl md:relative md:h-auto md:shadow-none md:flex-none",
+          showEvidence ? "w-full md:w-[400px] flex" : "w-0 hidden"
         )}
       >
         <div className="flex-none p-4 border-b border-[#303030] flex items-center justify-between bg-[#0C0C0C]">
