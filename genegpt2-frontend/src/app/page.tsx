@@ -154,7 +154,7 @@ export default function Home() {
 
   return (
     // FULL SCREEN WRAPPER
-    <div className="flex h-screen bg-[#212121] text-gray-100 font-sans overflow-hidden">
+    <div className="flex h-[100dvh] sm:h-screen bg-[#212121] text-gray-100 font-sans overflow-hidden">
 
       {/* 1. SIDEBAR (Left) */}
       <div
@@ -300,7 +300,7 @@ export default function Home() {
         {/* Input Area */}
         <div className={cn(
           "flex-none p-4 pb-6 w-full flex justify-center bg-gradient-to-t from-[#212121] to-[#212121]/0",
-          "fixed bottom-0 left-0 right-0 z-40 bg-[#212121] md:static md:bg-transparent"
+          "fixed bottom-0 left-0 right-0 z-40 bg-[#212121] pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:static md:bg-transparent md:pb-6"
         )}>
           <div className="w-full max-w-3xl relative">
             <div className="relative flex flex-col bg-[#2F2F2F] rounded-xl shadow-lg ring-1 ring-white/10 focus-within:ring-white/20 transition-all duration-200 overflow-hidden group">
