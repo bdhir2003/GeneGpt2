@@ -758,6 +758,14 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
 
     raw_lower = user_question.lower()
 
+    # Define invalid symbols globally for this function scope
+    invalid_symbols = {
+        "DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL",
+        "RISK", "BAD", "GOOD", "HELP", "YES", "NO", "SURE", "OKAY", "TEST", "RESULT",
+        "DANGEROUS", "SCARY", "WORRIED", "UNKNOWN", "VUS", "PATHOGENIC", "BENIGN",
+        "POSITIVE", "NEGATIVE", "WHAT", "WHY", "HOW", "WHEN"
+    }
+
     # 1.5️⃣ Upgrade some 'general_question' into 'broad_science_question'
     # Example: "what are the heart genes", "cancer genes", "diabetes genes"
     if intent.get("intent") == "general_question":
@@ -770,15 +778,56 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
     # 1.55️⃣ Upgrade some general → gene_question when we clearly see a symbol
     if intent.get("intent") == "general_question":
         candidate_symbol = _extract_candidate_gene_symbol(user_question)
-        # Validate candidate: exclude common generic terms
-        invalid_symbols = {"DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL"}
-        if candidate_symbol and candidate_symbol.upper() not in invalid_symbols:
+
+        
+        # Strict validation regex for candidate symbols
+        is_valid_format = bool(re.match(r"^[A-Z0-9]{2,10}$", candidate_symbol or ""))
+        
+        # Extended blocklist (generic biology + common English words that confuse the parser)
+        invalid_symbols = {
+            "DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL",
+            "RISK", "BAD", "GOOD", "HELP", "YES", "NO", "SURE", "OKAY", "TEST", "RESULT",
+            "DANGEROUS", "SCARY", "WORRIED", "UNKNOWN", "VUS", "PATHOGENIC", "BENIGN",
+            "POSITIVE", "NEGATIVE", "WHAT", "WHY", "HOW", "WHEN"
+        }
+        
+        if candidate_symbol and is_valid_format and candidate_symbol.upper() not in invalid_symbols:
             intent["intent"] = "gene_question"
             intent["gene_symbol"] = candidate_symbol
             print(
                 "[DEBUG] upgraded general → gene_question based on caps token:",
                 candidate_symbol,
             )
+
+    # 🛑 CLARIFICATION GATE (Backend Issue 1)
+    # If we have NO current gene/context, and the user asks a vague "it" question,
+    # or the parser hallucinates a gene from a word like "DANGEROUS", we must stop.
+    current_gene_in_session = clinical_state.get("current_gene")
+    
+    # 1. Check if intent thinks it found a gene, but it's actually an invalid word
+    # (Re-check the gene symbol in the intent against our strict list)
+    found_symbol = intent.get("gene_symbol")
+    if found_symbol:
+        is_valid_fmt = bool(re.match(r"^[A-Z0-9]{2,10}$", found_symbol))
+        if not is_valid_fmt or found_symbol.upper() in invalid_symbols:
+            print(f"[DEBUG] Invalid/Hallucinated symbol detected: {found_symbol}. Clearing intent.")
+            intent["intent"] = "general_question"
+            intent["gene_symbol"] = None
+            found_symbol = None
+
+    # 2. Check for Ambiguity (Vague question + No Context + No valid gene found)
+    is_ambiguous_phrasing = any(phrase in raw_lower for phrase in [
+        "is it dangerous", "is this bad", "should i worry", "what does this mean",
+        "is it pathogenic", "is it benign", "what should i do", "more concerning"
+    ])
+    
+    if (not current_gene_in_session) and (not found_symbol) and is_ambiguous_phrasing:
+        print("[DEBUG] Ambiguous question without context. Returning clarification response.")
+        return {
+            "answer": "I can help with that, but I'm not sure which gene or variant you are referring to. Could you please provide the gene symbol (e.g., BRCA1) or the specific result you are asking about?",
+            "answer_json": {}, # Empty placeholder
+            "intent": intent
+        }
 
     # 1.6️⃣ Detect pure chat (hi, how are you, math help, feelings, etc.)
     #      Only for things that are NOT already broad_science or forced gene/specific intents.
