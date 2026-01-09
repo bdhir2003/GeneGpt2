@@ -92,6 +92,7 @@ def _is_follow_up_question(question: str, clinical_state: Dict[str, Any]) -> boo
     q_lower = question.lower()
     
     # Check for pronouns and vague references
+    # Check for pronouns and vague references
     follow_up_indicators = [
         "this", "it", "that", "these", "those",
         "my", "our", "their",
@@ -100,10 +101,12 @@ def _is_follow_up_question(question: str, clinical_state: Dict[str, Any]) -> boo
         "should i", "what about", "how about"
     ]
     
-    has_indicator = any(indicator in q_lower for indicator in follow_up_indicators)
-    is_short = len(question.split()) < 10
-    
-    return has_indicator or is_short
+    # Use word boundary check for short indicators to avoid false positives (e.g. "it" in "wait")
+    for ind in follow_up_indicators:
+        if re.search(r"\b" + re.escape(ind) + r"\b", q_lower):
+            return True
+            
+    return False
 
 
 def _inject_context(question: str, clinical_state: Dict[str, Any]) -> str:
@@ -719,6 +722,40 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
     intent = classify_intent(user_question)
     print("[DEBUG] intent:", intent)
 
+    # 🛡️ CONTEXT TRANSITION GUARD
+    # If the user asks about a NEW gene, we must clear the old context unless explicitly linked.
+    detected_gene = intent.get("gene_symbol")
+    old_gene = clinical_state.get("current_gene")
+    
+    context_reset_needed = False
+    
+    if detected_gene and old_gene:
+        # If new gene detected and it's different from old gene
+        if detected_gene.upper() != old_gene.upper():
+            # And it's NOT a follow-up (explicit link)
+            if not is_follow_up:
+                context_reset_needed = True
+
+    # Also reset if it's a broad science question (e.g., "What is DNA repair?")
+    # This prevents "What is DNA?" inheriting "BRCA1" context.
+    if intent.get("intent") in ("broad_science_question", "general_question") and not is_follow_up:
+         # Only reset if we are purely general (no gene symbol found in intent)
+         if not intent.get("gene_symbol"):
+            context_reset_needed = True
+
+    if context_reset_needed:
+        print(f"[DEBUG] Context switch detected ({old_gene} -> {detected_gene}). Resetting clinical state.")
+        # Clear persistent state for this turn
+        if session_id:
+            session_store.update_clinical_state(session_id, {
+                "current_gene": None,
+                "current_variant": None,
+                "variant_classification": None,
+                "test_context": None
+            })
+            # Reload clean state
+            clinical_state = session_store.get_clinical_state(session_id)
+
     raw_lower = user_question.lower()
 
     # 1.5️⃣ Upgrade some 'general_question' into 'broad_science_question'
@@ -1015,8 +1052,14 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
     
     # Update clinical state for session
     if session_id:
+        # Don't save generic symbols to state
+        invalid_symbols = {"DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL"}
+        symbol_to_save = resolved_symbol
+        if symbol_to_save and symbol_to_save.upper() in invalid_symbols:
+            symbol_to_save = None
+
         _update_clinical_state_from_answer(
-            session_store, session_id, intent, resolved_symbol, 
+            session_store, session_id, intent, symbol_to_save, 
             resolved_variant_obj, clinical_state
         )
         # Add clinical state to response

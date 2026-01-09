@@ -86,7 +86,7 @@ class SessionStore:
             # Update simple fields
             for key in ["current_gene", "current_variant", "variant_classification", 
                        "test_context", "user_emotion"]:
-                if key in updates and updates[key] is not None:
+                if key in updates:
                     state[key] = updates[key]
             
             # Merge topics_discussed (set)
