@@ -66,7 +66,7 @@ export default function Home() {
       const total = disease_focus.total_phenotypes;
       if (total) md += `**Total OMIM phenotypes:** ${total}\n\n`;
 
-      if (disease_focus.top_diseases?.length > 0) {
+      if (disease_focus.top_diseases && disease_focus.top_diseases.length > 0) {
         md += "**Top associated diseases:**\n";
         disease_focus.top_diseases.forEach((d: string) => {
           md += `- ${d.replace(/[{}]/g, "")}\n`;
