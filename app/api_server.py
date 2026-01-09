@@ -14,8 +14,14 @@ from app.name_normalizer import normalize_gene_name
 
 app = FastAPI(title="GeneGPT2 API")
 
-# DEV CORS (allow both localhost + 127.0.0.1, and 3000/3001)
-ALLOWED_ORIGINS = ["*"]
+# PRODUCTION + DEV CORS
+ALLOWED_ORIGINS = [
+    "https://genegpt2-11.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+]
 
 app.add_middleware(
     CORSMiddleware,
