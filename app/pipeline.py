@@ -733,7 +733,9 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
     # 1.55️⃣ Upgrade some general → gene_question when we clearly see a symbol
     if intent.get("intent") == "general_question":
         candidate_symbol = _extract_candidate_gene_symbol(user_question)
-        if candidate_symbol:
+        # Validate candidate: exclude common generic terms
+        invalid_symbols = {"DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL"}
+        if candidate_symbol and candidate_symbol.upper() not in invalid_symbols:
             intent["intent"] = "gene_question"
             intent["gene_symbol"] = candidate_symbol
             print(

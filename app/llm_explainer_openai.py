@@ -827,6 +827,22 @@ YOUR TASK:
 5. Keep the explanation focused, structured, and a few paragraphs long, not a book.
 """
 
+    # 🔴 COUNSELOR MODE TRIGGER (Constraint Injection)
+    if use_counselor_mode:
+        user_message += """
+
+⚠️ COUNSELOR MODE ACTIVE ⚠️
+Your response MUST prioritize empathy and reassurance over raw data.
+1. Acknowledge the user's potential anxiety ("It can be stressful to see these results...").
+2. Standardize terms: Use "change" or "variant" instead of "mutation" where possible.
+3. For VUS (Uncertain Significance):
+   - Explicitly state: "This is NOT a positive result. It means the lab is unsure."
+   - Advise against making medical decisions based on this result alone.
+4. For Disease-Associated Genes:
+   - Emphasize that having a variant (especially VUS) prevents a definitive diagnosis without more evidence.
+5. Suggest next steps: "A genetic counselor can help look at this in the context of your family history."
+"""
+
     # ------------------------------------------------------------------
     # Call OpenAI (with AUDIT LOGGING)
     # ------------------------------------------------------------------

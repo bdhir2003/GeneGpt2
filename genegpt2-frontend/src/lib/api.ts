@@ -37,13 +37,24 @@ export interface ChatResponse {
 }
 
 export async function sendMessage(message: string): Promise<ChatResponse> {
+    // 1. Get or create persistent session ID from localStorage
+    let sessionId = typeof window !== 'undefined' ? localStorage.getItem("genegpt_session_id") : null;
+
+    if (!sessionId && typeof window !== 'undefined') {
+        sessionId = crypto.randomUUID();
+        localStorage.setItem("genegpt_session_id", sessionId);
+    }
+
     const res = await fetch(`${API_BASE_URL}/ask`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+            message,
+            session_id: sessionId
+        }),
     });
 
     if (!res.ok) {

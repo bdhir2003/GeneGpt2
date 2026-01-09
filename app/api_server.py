@@ -16,6 +16,7 @@ app = FastAPI(title="GeneGPT2 API")
 
 # PRODUCTION + DEV CORS
 ALLOWED_ORIGINS = [
+    "https://genegpt2.onrender.com",
     "https://genegpt2-11.onrender.com",
     "http://localhost:3000",
     "http://localhost:3001",
@@ -58,11 +59,12 @@ def ask(req: AskRequest, request: Request, response: Response):
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     try:
-        # SESSION LOGIC: Cookie > Body > New
+        # SESSION LOGIC: Body > Cookie > New
+        # We prioritize the body (localStorage) to ensure the frontend controls the session lifecycle.
         cookie_session_id = request.cookies.get("session_id")
         body_session_id = req.session_id
         
-        session_id = cookie_session_id or body_session_id
+        session_id = body_session_id or cookie_session_id
         
         if not session_id:
             session_id = str(uuid.uuid4())
