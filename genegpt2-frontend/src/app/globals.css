@@ -9,7 +9,7 @@
   :root {
     --background: #212121;
     /* ChatGPT-like dark gray */
-    --foreground: #ECECEC;
+    --foreground: #ffffff;
   }
 }
 
@@ -23,8 +23,10 @@ body {
   overflow-x: hidden;
 }
 
-*, *::before, *::after {
-    box-sizing: border-box;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 /* Custom Scrollbar for nicer aesthetic */

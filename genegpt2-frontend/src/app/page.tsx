@@ -164,13 +164,21 @@ export default function Home() {
           showSidebar ? "w-[260px] flex" : "w-0 hidden overflow-hidden"
         )}
       >
-        <div className="p-3">
+        <div className="p-3 flex items-center justify-between">
+          {/* Mobile Close Button */}
+          <button
+            onClick={() => setShowSidebar(false)}
+            className="md:hidden p-2 text-gray-400 hover:text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
           <button onClick={() => {
             setMessages([]);
             setCurrentEvidence(null);
             setCurrentMetrics(null); // Clear metrics
             if (window.innerWidth < 768) setShowSidebar(false);
-          }} className="w-full flex items-center justify-between px-3 py-3 text-sm text-gray-200 hover:bg-[#212121] rounded-lg transition-colors group">
+          }} className="flex-1 flex items-center justify-between px-3 py-3 text-sm text-gray-200 hover:bg-[#212121] rounded-lg transition-colors group">
             <span className="flex items-center gap-3 font-medium">
               <span className="bg-white text-black rounded-full p-1"><Sparkles className="w-3.5 h-3.5" /></span>
               New chat
@@ -305,6 +313,18 @@ export default function Home() {
                 style={{ color: '#ffffff' }}
                 rows={1}
               />
+              <div className="absolute right-2 bottom-2">
+                <button
+                  onClick={handleSend}
+                  disabled={isLoading || !input.trim()}
+                  className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    input.trim() ? "bg-white text-black hover:bg-gray-200" : "bg-[#3f3f3f] text-gray-500 cursor-not-allowed"
+                  )}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
 
             </div>
             <p className="text-[11px] text-center mt-3 text-gray-500 font-medium select-none">
