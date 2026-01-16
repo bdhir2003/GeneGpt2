@@ -789,7 +789,8 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
         "inheritance": "gene_question", # Treated as gene question but prompts inheritance evidence
         "education": "broad_science_question",
         "general": "general_question",
-        "unknown": "general_question"
+        "unknown": "general_question",
+        "clinical_management": "clinical_management"
     }
 
     mapped_intent_str = q_type_map.get(llm_classification.get("question_type"), "general_question")
@@ -803,6 +804,8 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
         "raw_question": user_question,
         "gene_symbol": llm_classification.get("gene"),
         "variant": llm_classification.get("variant"),
+        "domain": llm_classification.get("domain"),
+        "requires_genetic_evidence": llm_classification.get("requires_genetic_evidence"),
         "context": {
             "target": llm_classification.get("target"),
             "confidence": llm_classification.get("confidence")
@@ -883,7 +886,9 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
 
     # 1.6️⃣ Detect pure chat (hi, how are you, math help, feelings, etc.)
     #      Only for things that are NOT already broad_science or forced gene/specific intents.
-    if intent.get("intent") not in ("broad_science_question", "gene_question", "variant_question", "risk_question", "disease_question", "guidance_question"):
+    # 1.6️⃣ Detect pure chat (hi, how are you, math help, feelings, etc.)
+    #      Only for things that are NOT already broad_science or forced gene/specific intents.
+    if intent.get("intent") not in ("broad_science_question", "gene_question", "variant_question", "risk_question", "disease_question", "guidance_question", "clinical_management"):
         if _is_general_chat(user_question, intent):
             print("[DEBUG] general chat detected – forcing general_question intent.")
             intent = {
@@ -901,27 +906,27 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
     # 3️⃣ QUESTION JSON (generic structure; safe even for general questions)
     question_json = build_question_json(user_question)
 
-    # 3.5️⃣ SPECIAL CASE: general chat questions
-    if intent.get("intent") == "general_question":
+    # 3.5️⃣ SPECIAL CASE: general chat or clinical management questions
+    if intent.get("intent") in ("general_question", "clinical_management"):
         # Do NOT treat as a gene/variant; skip OMIM/NCBI/ClinVar/PubMed entirely.
-        print("[DEBUG] general_question intent detected – skipping gene/variant evidence lookups.")
+        print(f"[DEBUG] {intent.get('intent')} intent detected – skipping gene/variant evidence lookups.")
 
         empty_evidence = {
             "omim": {
                 "used": False,
-                "reason": "General chat question – no gene lookup.",
+                "reason": "General/Clinical question – no gene lookup.",
             },
             "ncbi": {
                 "used": False,
-                "reason": "General chat question – no gene lookup.",
+                "reason": "General/Clinical question – no gene lookup.",
             },
             "pubmed": {
                 "used": False,
-                "reason": "General chat question – no gene lookup.",
+                "reason": "General/Clinical question – no gene lookup.",
             },
             "clinvar": {
                 "used": False,
-                "reason": "General chat question – no gene/variant lookup.",
+                "reason": "General/Clinical question – no gene/variant lookup.",
             },
         }
 
@@ -1122,8 +1127,10 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
         )
 
     # 🛑 EVIDENCE SAFETY GATE (Step 3 of Request)
-    # If this is a medical question but we found NO evidence, do not let LLM hallucinate.
-    is_medical = q_type_str in ["gene", "variant", "risk", "inheritance"]
+    # Only block if the question requires genetic evidence but none was found.
+    # Standard clinical questions (requires_genetic_evidence=False) are allowed to proceed.
+    requires_genetic_evidence = llm_classification.get("requires_genetic_evidence", False)
+    
     has_evidence = (
         evidence.get("omim", {}).get("used") or 
         evidence.get("clinvar", {}).get("used") or 
@@ -1132,8 +1139,8 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
         evidence.get("ncbi", {}).get("used")
     )
     
-    if is_medical and not has_evidence:
-        print("[Pipeline] No evidence found for medical question. Aborting.")
+    if requires_genetic_evidence and not has_evidence:
+        print("[Pipeline] No evidence found for question requiring genetic evidence. Aborting.")
         return {
             "answer": f"I verified the medical databases (OMIM, ClinVar, PubMed) but could not find specific genetic evidence for **{resolved_symbol or 'your query'}**. I cannot provide a medical answer without verified data.",
             "answer_json": {},

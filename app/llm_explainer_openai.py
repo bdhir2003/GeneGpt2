@@ -89,6 +89,10 @@ def explain_with_openai(
     user_likely_anxious = context_block.get("user_likely_anxious", False)
     needs_next_steps = context_block.get("needs_next_steps", False)
     
+    # Domain check for Clinical Medicine (standard of care questions)
+    domain = intent_block.get("domain")
+    use_clinical_education_mode = (domain == "clinical_medicine")
+
     # Detect VUS mentions in the question
     raw_question_lower = raw_question.lower()
     is_vus_question = any(phrase in raw_question_lower for phrase in [
@@ -97,12 +101,14 @@ def explain_with_openai(
     ])
     
     # Determine if we need empathetic counselor mode
+    # (Skip strict counselor mode if it's a pure clinical education question, unless anxiety is detected)
     use_counselor_mode = (
-        implies_new_diagnosis or 
+        (implies_new_diagnosis or 
         user_likely_anxious or 
         needs_next_steps or
-        is_vus_question or  # VUS questions need safety-first counselor mode
-        intent_label in ("guidance_question", "risk_question")
+        is_vus_question or 
+        intent_label in ("guidance_question", "risk_question"))
+        and not use_clinical_education_mode
     )
 
     # ------------------------------------------------------------------
@@ -466,6 +472,19 @@ Your response MUST prioritize empathy and reassurance over raw data.
 4. For Disease-Associated Genes:
    - Emphasize that having a variant (especially VUS) prevents a definitive diagnosis without more evidence.
 5. Suggest next steps: "A genetic counselor can help look at this in the context of your family history."
+"""
+
+    # 🔵 CLINICAL EDUCATION MODE (Standard of Care Injection)
+    if use_clinical_education_mode:
+        user_message += """
+
+⚠️ CLINICAL EDUCATION MODE ACTIVE ⚠️
+This is a standard clinical medicine question (e.g., dosing, treatment guidelines, lab interpretation).
+1. Provide a clear EDUCATIONAL answer based on general medical consensus (standard of care).
+2. DO NOT require genetic evidence (ClinVar/OMIM) for this type of question.
+3. Use non-personalized language ("The standard starting dose is..." rather than "You should take...").
+4. Explain the "Why" (mechanism of action, side effect reason).
+5. Always conclude with "Please consult your doctor for your specific treatment plan."
 """
 
     # ------------------------------------------------------------------

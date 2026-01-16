@@ -42,27 +42,40 @@ def classify_question_with_llm(user_question: str) -> Dict[str, Any]:
     {
         "gene": "string or null", 
         "variant": "string or null",
-        "question_type": "general | inheritance | variant | risk | education | unknown",
+        "question_type": "general | inheritance | variant | risk | education | clinical_management | unknown",
+        "domain": "genetics | clinical_medicine | other",
+        "requires_genetic_evidence": boolean,
         "target": "self | children | family | general",
         "needs_clarification": boolean,
         "confidence": float (0.0 to 1.0),
         "reason": "short explanation"
     }
 
+    RULES for 'domain' & 'requires_genetic_evidence':
+    1. 'genetics': Questions about specific genes (BRCA1), variants, inheritance, or genetic testing.
+       -> requires_genetic_evidence: TRUE
+    2. 'clinical_medicine': Questions about standard care, medication dosing (Metformin, Statins), lab interpretation (GFR, A1C, lipids), or general disease management NOT specific to a user's genetic result.
+       -> requires_genetic_evidence: FALSE
+    3. 'other': Greetings, general help.
+       -> requires_genetic_evidence: FALSE
+
     RULES for 'question_type':
     - 'variant': User asks about a specific mutation (c.123, V600E) or "my result".
     - 'inheritance': User asks about passing to kids, family risk, or "is it hereditary?".
-    - 'risk': User asks "is this bad?", "danger?", "cancer risk?".
+    - 'risk': User asks "is this bad?", "danger?", "cancer risk?" in a genetic context.
+    - 'clinical_management': Dosing, treatment guidelines, lab values (GFR, A1C), side effects.
     - 'education': Broad questions like "What is DNA?", "How do genes work?".
     - 'general': Greetings, "help", or off-topic.
 
     RULES for 'gene':
     - Extract standard gene symbols (e.g., BRCA1, TP53).
     - Ignore generic words like "Gene", "DNA", "Mutation".
+    - For clinical drugs (e.g. Metformin), do NOT map them to genes unless explicitly asked (e.g. "Metformin and AMPK gene").
 
     RULES for 'needs_clarification':
     - Set to TRUE if the question is medically ambiguous (e.g. "Is it dangerous?" with NO gene mentioned).
     - Set to TRUE if the gene symbol is unclear or looks like a typo.
+    - False for standard clinical questions like "Metformin dosing".
     """
 
     try:
