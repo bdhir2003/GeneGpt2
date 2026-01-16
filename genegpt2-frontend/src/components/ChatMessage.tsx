@@ -34,7 +34,7 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
                     className={cn(
                         "w-8 h-8 rounded-full flex items-center justify-center shadow-sm",
                         isUser
-                            ? "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                            ? "bg-gray-700 text-white"
                             : "bg-gradient-to-br from-blue-600 to-indigo-600 text-white"
                     )}
                 >
@@ -43,10 +43,10 @@ export function ChatMessage({ role, content }: ChatMessageProps) {
             </div>
 
             <div className="flex-1 min-w-0 space-y-1">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                <p className="text-sm font-semibold text-white mb-1">
                     {isUser ? "You" : "GeneGPT"}
                 </p>
-                <div className="prose prose-sm max-w-none text-gray-800 dark:text-gray-200 leading-relaxed dark:prose-invert prose-a:text-blue-400 prose-a:font-normal prose-a:no-underline hover:prose-a:underline">
+                <div className="prose prose-sm max-w-none text-white leading-relaxed prose-invert prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white prose-a:text-blue-400 prose-a:font-normal prose-a:no-underline hover:prose-a:underline">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                 </div>
 

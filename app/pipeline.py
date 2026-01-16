@@ -481,6 +481,7 @@ def build_evidence_for_gene_question(
     gene_symbol: str,
     omim_id: Optional[str] = None,
     ncbi_id: Optional[str] = None,
+    question_type: str = "general",
 ) -> dict:
 
     gene_symbol = (gene_symbol or "").strip()
@@ -530,11 +531,37 @@ def build_evidence_for_gene_question(
             },
         }
 
+    # Default: fetch basic gene info (OMIM + NCBI are cheap and foundational)
     omim_box = get_omim_summary(gene_symbol, omim_id=omim_id)
     ncbi_box = get_ncbi_summary(gene_symbol, gene_id=ncbi_id)
-    pubmed_box = get_pubmed_summary(gene_symbol)
-    genereviews_box = get_genereviews_summary(gene_symbol)
-    gnomad_box = get_gnomad_summary(gene_symbol)
+
+    # Initialize others as unused
+    pubmed_box = {"used": False, "reason": "Not requested by plan."}
+    genereviews_box = {"used": False, "reason": "Not requested by plan."}
+    gnomad_box = {"used": False, "reason": "Not requested by plan."}
+
+    # Selective Fetching Plan
+    if question_type == "inheritance":
+        # Prioritize family risk / mode of inheritance
+        genereviews_box = get_genereviews_summary(gene_symbol)
+        pubmed_box = get_pubmed_summary(gene_symbol)  # Check for recent papers
+        gnomad_box = {"used": False, "reason": "Population freq not needed for inheritance."}
+
+    elif question_type == "education" or question_type == "general":
+        # Basic summary only
+        # We already have OMIM + NCBI
+        pass
+
+    elif question_type == "risk":
+        # Full workup
+        genereviews_box = get_genereviews_summary(gene_symbol)
+        pubmed_box = get_pubmed_summary(gene_symbol)
+        gnomad_box = get_gnomad_summary(gene_symbol)
+    
+    else:
+        # Fallback: fetch most things
+        pubmed_box = get_pubmed_summary(gene_symbol)
+        genereviews_box = get_genereviews_summary(gene_symbol)
 
     clinvar_box = {
         "used": False,
@@ -563,6 +590,7 @@ def build_evidence_for_variant_question(
     variant_token: str,  # can be HGVS (c./p.) OR rsID
     omim_id: Optional[str] = None,
     ncbi_id: Optional[str] = None,
+    question_type: str = "variant",
 ) -> dict:
 
     gene_symbol = (gene_symbol or "").strip()
@@ -614,11 +642,23 @@ def build_evidence_for_variant_question(
             },
         }
 
+    # Always fetch gene context for variants
     omim_box = get_omim_summary(gene_symbol, omim_id=omim_id)
     ncbi_box = get_ncbi_summary(gene_symbol, gene_id=ncbi_id)
-    pubmed_box = get_pubmed_summary(gene_symbol)
-    genereviews_box = get_genereviews_summary(gene_symbol)
-    gnomad_box = get_gnomad_summary(gene_symbol)
+    
+    # Selective Variant Fetching
+    if question_type == "variant":
+        # We need everything relevant to the variant
+        # ClinVar is fetched below manually
+        # PubMed often useful for specific variant papers
+        pubmed_box = get_pubmed_summary(gene_symbol) 
+        genereviews_box = get_genereviews_summary(gene_symbol)
+        gnomad_box = get_gnomad_summary(gene_symbol) # frequency is key for variants
+    else:
+        # Default full fetch
+        pubmed_box = get_pubmed_summary(gene_symbol)
+        genereviews_box = get_genereviews_summary(gene_symbol)
+        gnomad_box = get_gnomad_summary(gene_symbol)
 
     # ClinVar client should accept either rsID or HGVS string
     clinvar_box = get_clinvar_summary(gene_symbol, variant_token)
@@ -718,9 +758,58 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
         user_question = _inject_context(user_question, clinical_state)
         print(f"[DEBUG] Follow-up detected, injected context: {user_question}")
 
-    # 1️⃣ INTENT FIRST
-    intent = classify_intent(user_question)
-    print("[DEBUG] intent:", intent)
+    # 1️⃣ INTENT FIRST (LLM-BASED QUESTION UNDERSTANDING)
+    try:
+        from .llm_controller import classify_question_with_llm
+        llm_classification = classify_question_with_llm(user_question)
+    except Exception as e:
+        print(f"[Pipeline Error] LLM Classifier failed: {e}. Falling back to regex.")
+        llm_classification = {
+            "gene": None,
+            "question_type": "unknown",
+            "needs_clarification": False
+        }
+
+    # 🛑 CLARIFICATION GATE (Step 1 of Request)
+    if llm_classification.get("needs_clarification"):
+        print("[DEBUG] LLM requested clarification.")
+        return {
+            "answer": f"I want to ensure I give you the correct information. {llm_classification.get('reason', 'Could you clarify which gene or condition you are asking about?')}",
+            "answer_json": {},
+            "intent": {"intent": "clarification_needed"}
+        }
+
+    # Map LLM classification to legacy 'intent' structure to keep downstream compatible
+    # Legacy: intent="gene_question", gene_symbol="BRCA1"
+    # New: question_type="risk", gene="BRCA1"
+    
+    q_type_map = {
+        "variant": "variant_question",
+        "risk": "risk_question",
+        "inheritance": "gene_question", # Treated as gene question but prompts inheritance evidence
+        "education": "broad_science_question",
+        "general": "general_question",
+        "unknown": "general_question"
+    }
+
+    mapped_intent_str = q_type_map.get(llm_classification.get("question_type"), "general_question")
+    
+    # If LLM found a gene, it's usually at least a gene_question
+    if llm_classification.get("gene") and mapped_intent_str == "general_question":
+        mapped_intent_str = "gene_question"
+
+    intent = {
+        "intent": mapped_intent_str,
+        "raw_question": user_question,
+        "gene_symbol": llm_classification.get("gene"),
+        "variant": llm_classification.get("variant"),
+        "context": {
+            "target": llm_classification.get("target"),
+            "confidence": llm_classification.get("confidence")
+        }
+    }
+    
+    print("[DEBUG] LLM Intent:", intent)
 
     # 🛡️ CONTEXT TRANSITION GUARD
     # If the user asks about a NEW gene, we must clear the old context unless explicitly linked.
@@ -737,15 +826,12 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
                 context_reset_needed = True
 
     # Also reset if it's a broad science question (e.g., "What is DNA repair?")
-    # This prevents "What is DNA?" inheriting "BRCA1" context.
     if intent.get("intent") in ("broad_science_question", "general_question") and not is_follow_up:
-         # Only reset if we are purely general (no gene symbol found in intent)
          if not intent.get("gene_symbol"):
             context_reset_needed = True
 
     if context_reset_needed:
         print(f"[DEBUG] Context switch detected ({old_gene} -> {detected_gene}). Resetting clinical state.")
-        # Clear persistent state for this turn
         if session_id:
             session_store.update_clinical_state(session_id, {
                 "current_gene": None,
@@ -753,51 +839,17 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
                 "variant_classification": None,
                 "test_context": None
             })
-            # Reload clean state
             clinical_state = session_store.get_clinical_state(session_id)
 
     raw_lower = user_question.lower()
 
-    # Define invalid symbols globally for this function scope
+    # Define invalid symbols globally 
     invalid_symbols = {
         "DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL",
         "RISK", "BAD", "GOOD", "HELP", "YES", "NO", "SURE", "OKAY", "TEST", "RESULT",
         "DANGEROUS", "SCARY", "WORRIED", "UNKNOWN", "VUS", "PATHOGENIC", "BENIGN",
         "POSITIVE", "NEGATIVE", "WHAT", "WHY", "HOW", "WHEN"
     }
-
-    # 1.5️⃣ Upgrade some 'general_question' into 'broad_science_question'
-    # Example: "what are the heart genes", "cancer genes", "diabetes genes"
-    if intent.get("intent") == "general_question":
-        if "genes" in raw_lower and any(
-            word in raw_lower for word in ["heart", "cardiac", "cancer", "tumor", "diabetes"]
-        ):
-            intent["intent"] = "broad_science_question"
-            print("[DEBUG] broad_science_question detected from general text.")
-
-    # 1.55️⃣ Upgrade some general → gene_question when we clearly see a symbol
-    if intent.get("intent") == "general_question":
-        candidate_symbol = _extract_candidate_gene_symbol(user_question)
-
-        
-        # Strict validation regex for candidate symbols
-        is_valid_format = bool(re.match(r"^[A-Z0-9]{2,10}$", candidate_symbol or ""))
-        
-        # Extended blocklist (generic biology + common English words that confuse the parser)
-        invalid_symbols = {
-            "DNA", "RNA", "GENE", "VARIANT", "MUTATION", "CHROMOSOME", "PROTEIN", "GENOME", "CELL",
-            "RISK", "BAD", "GOOD", "HELP", "YES", "NO", "SURE", "OKAY", "TEST", "RESULT",
-            "DANGEROUS", "SCARY", "WORRIED", "UNKNOWN", "VUS", "PATHOGENIC", "BENIGN",
-            "POSITIVE", "NEGATIVE", "WHAT", "WHY", "HOW", "WHEN"
-        }
-        
-        if candidate_symbol and is_valid_format and candidate_symbol.upper() not in invalid_symbols:
-            intent["intent"] = "gene_question"
-            intent["gene_symbol"] = candidate_symbol
-            print(
-                "[DEBUG] upgraded general → gene_question based on caps token:",
-                candidate_symbol,
-            )
 
     # 🛑 CLARIFICATION GATE (Backend Issue 1)
     # If we have NO current gene/context, and the user asks a vague "it" question,
@@ -1051,19 +1103,43 @@ def run_genegpt_pipeline(user_question: str, session_id: Optional[str] = None) -
         question_type = "variant" if variant_search_token else "gene"
 
     # 7️⃣ ALWAYS FETCH LIVE EVIDENCE (memory disabled)
+    q_type_str = llm_classification.get("question_type", "general")
+
     if question_type == "variant" and variant_search_token:
         evidence = build_evidence_for_variant_question(
             resolved_symbol,
             variant_search_token,  # can be rsID or HGVS
             omim_id=resolved_omim_id,
             ncbi_id=resolved_ncbi_id,
+            question_type=q_type_str,
         )
     else:
         evidence = build_evidence_for_gene_question(
             resolved_symbol,
             omim_id=resolved_omim_id,
             ncbi_id=resolved_ncbi_id,
+            question_type=q_type_str,
         )
+
+    # 🛑 EVIDENCE SAFETY GATE (Step 3 of Request)
+    # If this is a medical question but we found NO evidence, do not let LLM hallucinate.
+    is_medical = q_type_str in ["gene", "variant", "risk", "inheritance"]
+    has_evidence = (
+        evidence.get("omim", {}).get("used") or 
+        evidence.get("clinvar", {}).get("used") or 
+        evidence.get("genereviews", {}).get("used") or 
+        evidence.get("pubmed", {}).get("used") or
+        evidence.get("ncbi", {}).get("used")
+    )
+    
+    if is_medical and not has_evidence:
+        print("[Pipeline] No evidence found for medical question. Aborting.")
+        return {
+            "answer": f"I verified the medical databases (OMIM, ClinVar, PubMed) but could not find specific genetic evidence for **{resolved_symbol or 'your query'}**. I cannot provide a medical answer without verified data.",
+            "answer_json": {},
+            "intent": intent,
+            "sources": []
+        }
 
     # 8️⃣ FINAL ANSWER JSON (what the LLM sees)
     answer_json = build_answer_json(

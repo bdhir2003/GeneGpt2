@@ -95,6 +95,19 @@ def ask(req: AskRequest, request: Request, response: Response):
         # 1) Evidence-based structured JSON with session context
         answer_json = run_genegpt_pipeline(clean_text, session_id=session_id)
 
+        # 1.5) Check if pipeline returned a direct answer (Clarification / No Evidence)
+        if answer_json.get("answer"):
+             return {
+                "answer": answer_json["answer"],
+                "usage": {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0},
+                "trust": 0.0,
+                "certainty": 0.0,
+                "sources": answer_json.get("sources", []),
+                "answer_json": answer_json,
+                "session_id": session_id,
+                "clinical_state": answer_json.get("clinical_state", {})
+             }
+
         # 2) LLM explanation (optional: only if key exists)
         # If key is missing, we fallback to evidence-only response.
         api_key = os.getenv("OPENAI_API_KEY", "").strip()

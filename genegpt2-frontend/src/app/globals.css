@@ -1,16 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #212121;
-    /* ChatGPT-like dark gray */
-    --foreground: #ffffff;
-  }
+  --background: #212121;
+  --foreground: #ffffff;
 }
 
 body {

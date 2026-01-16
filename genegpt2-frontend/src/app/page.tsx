@@ -154,7 +154,7 @@ export default function Home() {
 
   return (
     // FULL SCREEN WRAPPER
-    <div className="flex h-[100dvh] sm:h-screen bg-[#212121] text-gray-100 font-sans overflow-hidden">
+    <div className="flex h-[100dvh] sm:h-screen bg-[#212121] text-white font-sans overflow-hidden">
 
       {/* 1. SIDEBAR (Left) */}
       <div
@@ -178,7 +178,7 @@ export default function Home() {
             setCurrentEvidence(null);
             setCurrentMetrics(null); // Clear metrics
             if (window.innerWidth < 768) setShowSidebar(false);
-          }} className="flex-1 flex items-center justify-between px-3 py-3 text-sm text-gray-200 hover:bg-[#212121] rounded-lg transition-colors group">
+          }} className="flex-1 flex items-center justify-between px-3 py-3 text-sm text-white hover:bg-[#212121] rounded-lg transition-colors group">
             <span className="flex items-center gap-3 font-medium">
               <span className="bg-white text-black rounded-full p-1"><Sparkles className="w-3.5 h-3.5" /></span>
               New chat
@@ -247,7 +247,7 @@ export default function Home() {
                 <Menu className="w-5 h-5" />
               </button>
             )}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-gray-200 cursor-pointer hover:bg-[#2f2f2f] transition-colors">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-white cursor-pointer hover:bg-[#2f2f2f] transition-colors">
               <span className="text-lg font-semibold">GeneGPT 5.2</span>
               <span className="text-gray-500 text-xs font-medium bg-[#2f2f2f] px-1.5 py-0.5 rounded">v2</span>
             </div>

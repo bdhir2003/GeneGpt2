@@ -53,7 +53,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
             {typeof trust === 'number' && (
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-gray-300 font-medium text-sm">
+                        <div className="flex items-center gap-2 text-white font-medium text-sm">
                             <ShieldCheck className="w-4 h-4 text-blue-400" />
                             Evidence Trust Level
                         </div>
@@ -82,7 +82,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
                         <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-red-500" /> <span className="text-[10px] text-gray-400">Emerging (0–40%)</span></div>
                     </div>
 
-                    <p className="text-[10px] text-gray-500 mt-1 italic leading-tight">
+                    <p className="text-[10px] text-gray-400 mt-1 italic leading-tight">
                         Red does not mean incorrect — it means scientific evidence is still emerging or limited.
                     </p>
 
@@ -97,7 +97,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
                         </button>
                         {isTrustOpen && (
                             <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                <ul className="space-y-1 text-[10px] text-gray-400 font-mono bg-[#161616] p-2 rounded border border-[#2a2a2a]">
+                                <ul className="space-y-1 text-[10px] text-gray-300 font-mono bg-[#161616] p-2 rounded border border-[#2a2a2a]">
                                     <li>Start at 100%</li>
                                     <li>−20% if only literature (PubMed) used</li>
                                     <li>−15% if no clinical guideline source</li>
@@ -105,7 +105,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
                                     <li>−15% if rare gene or limited phenotypes</li>
                                     <li>−10% if conflicting sources detected</li>
                                 </ul>
-                                <p className="text-[10px] text-gray-500 italic leading-relaxed">
+                                <p className="text-[10px] text-gray-400 italic leading-relaxed">
                                     This score reflects strength and diversity of scientific evidence, not importance or seriousness.
                                 </p>
                             </div>
@@ -123,7 +123,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
             {typeof certainty === 'number' && (
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-gray-300 font-medium text-sm">
+                        <div className="flex items-center gap-2 text-white font-medium text-sm">
                             <Scale className="w-4 h-4 text-teal-400" />
                             Scientific Consensus Level
                         </div>
@@ -148,7 +148,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
 
                     <div className="pt-3 border-t border-[#222] mt-1">
                         <p className="text-[10px] font-semibold text-gray-400 mb-1">How to read this</p>
-                        <p className="text-[10px] text-gray-500 leading-relaxed">
+                        <p className="text-[10px] text-gray-400 leading-relaxed">
                             This reflects how consistent and well-established current scientific knowledge is for this topic.
                             A lower score does not mean the answer is wrong — it means the evidence is still emerging, limited, or varies across studies.
                         </p>
@@ -164,7 +164,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
             {/* 3. TOKEN USAGE METER */}
             {usage && (
                 <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-gray-300 font-medium text-sm">
+                    <div className="flex items-center gap-2 text-white font-medium text-sm">
                         <Cpu className="w-4 h-4 text-purple-400" />
                         Token Usage
                     </div>
@@ -172,7 +172,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
                     <div className="relative pt-1">
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Load</span>
-                            <span className="text-xs font-bold text-gray-200 font-mono">{usage.total_tokens.toLocaleString()}</span>
+                            <span className="text-xs font-bold text-white font-mono">{usage.total_tokens.toLocaleString()}</span>
                         </div>
 
                         {/* Progress Bar (Blue -> Purple Gradient) */}
@@ -196,7 +196,7 @@ export function AnswerMetrics({ usage, trust, certainty }: AnswerMetricsProps) {
 
                     <div className="pt-3 border-t border-[#222] mt-1">
                         <p className="text-[10px] font-semibold text-gray-400 mb-1">How to read this</p>
-                        <p className="text-[10px] text-gray-500 leading-relaxed">
+                        <p className="text-[10px] text-gray-400 leading-relaxed">
                             This shows how much context the AI used to answer your question.
                             It includes your question, the answer, system instructions, memory, and any scientific sources retrieved.
                             Higher values mean more information was used, not that your question was long.
