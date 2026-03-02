@@ -28,51 +28,51 @@ This makes the system more reliable and easier to audit.
 
 How GeneGPT Works (Simple Explanation)
 
-GeneGPT has two main layers:
+GeneGPT works in two main layers.
 
 Layer 1 – Question Understanding
 
 The system first converts a natural language question into structured information.
 
-For example:
+It identifies:
 
-If someone asks about a gene, the system identifies:
-
-Gene name
+The gene name
 
 Whether a mutation is mentioned
 
-What type of answer is needed (disease links, risk level, explanation, etc.)
+The type of query (gene-disease or gene-variant risk)
 
-This taught me how important structured inputs are in AI systems.
+What information is needed (disease links, risk level, explanation)
+
+This taught me how important structured input is in AI system design.
 
 Layer 2 – Evidence Retrieval
 
-After understanding the question, the system retrieves structured data from:
+After understanding the question, the system retrieves structured evidence from trusted biomedical databases.
 
-OMIM (for gene-disease relationships)
+OMIM is used for gene–disease relationships.
 
-ClinVar (for mutation classification and risk)
+ClinVar is used for variant classification and mutation risk interpretation.
 
-Instead of mixing reasoning and data, the system clearly separates them. This improves transparency.
+The reasoning layer and the evidence layer are kept separate. This improves transparency and allows the system to clearly show where information comes from.
 
 What I Learned From This Project
 
-This project helped me understand:
+Through this project, I learned:
 
 How to design layered AI architectures
 
-The importance of structured JSON in AI pipelines
+Why separating reasoning and evidence improves reliability
 
 How biomedical databases like OMIM and ClinVar work
 
-Why explainability is critical in healthcare AI
-
-The difference between generating text and retrieving evidence
+The importance of structured JSON pipelines
 
 How to design systems that can later integrate with LLMs or RAG
 
-I also learned that system design is more important than just building models. A clear architecture makes future improvements easier.
+Why explainability is critical in healthcare AI
+
+I also learned that system design and architecture are just as important as building machine learning models.
 
 Current Capabilities (v1)
 
@@ -80,33 +80,33 @@ Understands gene-only questions
 
 Understands gene + mutation questions
 
-Separates reasoning from evidence
+Separates question logic from evidence retrieval
 
 Uses structured data design
 
-Designed to expand into a full research system
+Built as a foundation for future research expansion
 
-Future Plans
+Future Improvements
 
 For the next version, I plan to:
 
-Automate OMIM and ClinVar API retrieval
-
-Add confidence scoring
+Automate OMIM and ClinVar API integration
 
 Add citation linking
 
-Build a simple user interface
+Add confidence scoring
 
 Add evaluation metrics
 
-Integrate with LLM reasoning layer
+Integrate a reasoning LLM layer
 
-Why This Project Matters To Me
+Build a simple user interface
 
-As someone interested in AI and healthcare, I wanted to explore how AI systems can be transparent and structured rather than just predictive.
+Research Context
 
-GeneGPT is part of my research exploration into trustworthy AI systems for healthcare decision support.
+GeneGPT is part of my research exploration in AI for healthcare and structured reasoning systems.
+
+The goal is to design AI systems that are transparent, trustworthy, and suitable for biomedical applications.
 
 Author
 
